@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "M5Dial.h"
 
-#define _USE_USBPRINTF
+#define USE_USBPRINTF
 // RGJ enabling USB debug printf causes loss of serial control for re-flash and reset/run, requiring btn-hold power cycle before can flash, and a power cycle after flash complete to run the code
 //  Turning this off, after an initial btn-hold power cycle and flash, restores the ability to flash & reset/run automatically with no physical intervension
 // WHY?  This has been working for months on the same HW with much larger builds until recently
@@ -15,17 +15,21 @@
 #define DebugPrint(...)   // do nothing
 #endif
 
-// put function declarations here:
-int myFunction(int, int);
+TaskHandle_t Task2;
 
-void setup()
+
+void Task2code(void *pvParameters)
 {
-  auto cfg = M5.config();
-  M5Dial.begin(cfg, false, true);
+  char buffer[90];
 
-#ifdef USE_USBPRINTF
-  USBSerial.begin(115200);
-#endif
+  for (;;)
+  {
+    delay(1700);
+
+    snprintf(buffer, sizeof(buffer),
+             "%lu: hello from Task2 running on core %d", millis(), xPortGetCoreID());
+    DebugPrintLn(buffer);
+  }
 }
 
 int interval = 1000;
@@ -58,9 +62,30 @@ void loop()
       startMillis = currentMillis;
 
       snprintf(buffer, sizeof(buffer),
-               "%lu: hello", currentMillis);
+               "%lu: hello from loop() running on core %d", currentMillis, xPortGetCoreID());
       DebugPrintLn(buffer);
     }
   }
+#endif
+}
+
+void setup()
+{
+  auto cfg = M5.config();
+  M5Dial.begin(cfg, false, true);
+
+  // create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
+  xTaskCreatePinnedToCore(
+      Task2code, /* Task function. */
+      "Task2",   /* name of task. */
+      10000,     /* Stack size of task */
+      NULL,      /* parameter of the task */
+      1,         /* priority of the task */
+      &Task2,    /* Task handle to keep track of created task */
+      0);        /* pin task to core 0 */
+  delay(500);
+
+#ifdef USE_USBPRINTF
+  USBSerial.begin(115200);
 #endif
 }
